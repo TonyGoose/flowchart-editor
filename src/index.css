@@ -1,0 +1,253 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  body {
+    font-family: 'Google Sans', 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+    background: #f8f9fa;
+  }
+  
+  /* Google Material Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #dadce0;
+    border-radius: 8px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #bdc1c6;
+  }
+}
+
+@layer components {
+  /* Google Style Buttons */
+  .google-btn {
+    @apply px-4 py-2 rounded-full font-medium transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .google-btn-primary {
+    @apply google-btn bg-[#1a73e8] text-white hover:bg-[#1557b0] 
+           focus:ring-[#1a73e8] shadow-sm hover:shadow-md;
+  }
+  
+  .google-btn-secondary {
+    @apply google-btn bg-transparent text-[#1a73e8] hover:bg-[#e8f0fe]
+           focus:ring-[#1a73e8];
+  }
+  
+  .google-btn-tonal {
+    @apply google-btn bg-[#e8eaed] text-[#1f1f1f] hover:bg-[#dadce0]
+           focus:ring-[#1a73e8];
+  }
+  
+  /* Google Style Card */
+  .google-card {
+    @apply bg-white rounded-2xl shadow-sm border border-[#e8eaed] 
+           transition-all duration-200 hover:shadow-md;
+  }
+  
+  /* Google Style Input */
+  .google-input {
+    @apply w-full px-4 py-3 bg-white border border-[#dadce0] rounded-xl
+           text-[#1f1f1f] text-base transition-all duration-200
+           focus:outline-none focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/20
+           placeholder:text-[#80868b];
+  }
+  
+  /* Glass morphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #1a73e8 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* React Flow Custom Styles */
+.react-flow {
+  width: 100%;
+  height: 100%;
+  background: #f8f9fa;
+}
+
+.react-flow__node {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.react-flow__node:hover {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+  transform: translateY(-2px);
+}
+
+.react-flow__node.selected {
+  filter: drop-shadow(0 6px 16px rgba(26, 115, 232, 0.3));
+}
+
+.react-flow__edge-path {
+  stroke-width: 2.5;
+  transition: all 0.2s ease;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 4;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: #1a73e8;
+  border: 2px solid white;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.5);
+  background: #1557b0;
+}
+
+.react-flow__controls {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e8eaed;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.react-flow__controls button {
+  background: white;
+  border: none;
+  border-bottom: 1px solid #e8eaed;
+  transition: all 0.2s;
+}
+
+.react-flow__controls button:hover {
+  background: #f8f9fa;
+}
+
+.react-flow__minimap {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e8eaed;
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 10;
+}
+
+.react-flow__panel {
+  margin: 16px;
+  position: absolute;
+  z-index: 10;
+}
+
+/* Animations */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease;
+}
+
+#arrowhead {
+  marker-end: url(#arrowhead);
+}
+
+.react-flow__edge-path {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #3b82f6;
+  stroke-width: 3;
+}
+
+.react-flow__node-decision {
+  width: 100px;
+  height: 100px;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: white;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+}
+
+.react-flow__handle:hover {
+  background: #3b82f6;
+  transform: scale(1.2);
+}
+
+/* Маркер для стрелок - ВАЖНО! */
+.react-flow__edge-path {
+  marker-end: url(#arrowhead);
+}
+
+.react-flow__edge {
+  marker-end: url(#arrowhead);
+}
+
+/* Глобальный маркер */
+svg {
+  marker-end: url(#arrowhead);
+}
+
