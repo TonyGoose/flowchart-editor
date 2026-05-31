@@ -1,16 +1,51 @@
-# React + Vite
+# Web-приложение для проверочных работ по блок-схемам
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Интерактивная платформа для отработки и контроля навыков составления блок-схем алгоритмов.
 
-Currently, two official plugins are available:
+## Возможности
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Для студента
+- **3 режима**: Обучение (с подсказками), Тренировка (без подсказок), Экзамен (таймер + проходной балл 70%)
+- Перетаскивание блоков из библиотеки на схему
+- Возврат блока в библиотеку при ошибке
+- Автоматическая проверка после сдачи
+- Детальный результат: процент, список ошибок, прогресс-бар
 
-## React Compiler
+### Для преподавателя
+- Визуальный редактор блок-схем
+- 8 типов блоков (Start, End, Process, Decision, Data, Predefined Process, Trap, Waypoint)
+- 2 типа стрелок (Bezier — плавные, Step — ступенчатые)
+- Точки изгиба на стрелках (двойной клик)
+- Авто-разметка схемы (кнопка "Авто-разметка")
+- Панель свойств для настройки блоков и стрелок
+- Система ловушек (неправильные блоки)
+- Админ-панель: управление вариантами, просмотр статистики
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Библиотека заданий
+- **55 предустановленных вариантов**
+- 11 категорий: линейные, ветвления, циклы, массивы, сортировка, поиск, математика, численные методы, подпрограммы
 
-## Expanding the ESLint configuration
+## Технологии
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Компонент | Технология |
+|-----------|------------|
+| Фреймворк | React 18 |
+| Визуализация схем | ReactFlow 11 |
+| Управление состоянием | Zustand (редактор) + useState |
+| Сборка | Vite 5 |
+| Хранение | localStorage |
+| Стили | TailwindCSS + CSS3 |
+| Авто-разметка | dagre |
+
+## Установка и запуск
+
+### Требования
+- Node.js 16+
+- npm 8+
+
+### Установка
+
+```bash
+git clone https://github.com/TonyGoose/flowchart-editor.git
+cd flowchart-editor
+npm install
