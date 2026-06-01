@@ -3,7 +3,8 @@ import { ReactFlowProvider, MiniMap, useReactFlow } from 'reactflow';
 import ReactFlow, { Background, Controls } from 'reactflow';
 import StudentView from './student/StudentView';
 import Editor from './editor/Editor';
-import { VARIANTS, loadVariants, saveVariants, loadResults, saveResults } from './data/variants';
+import { VARIANTS, loadVariants, saveVariants, loadResults, saveResults, loadLastSyncTime, saveLastSyncTime } from './data/variants';
+import { saveResultToCloud, subscribeToResults, clearResultsFromCloud, publishVariantToCloud, publishAllVariantsToCloud, deleteVariantFromCloud, syncNewVariants } from './firebase/firebaseService';
 import StartEndNode from './editor/nodes/StartEndNode';
 import ProcessNode from './editor/nodes/ProcessNode';
 import DecisionNode from './editor/nodes/DecisionNode';
@@ -107,24 +108,79 @@ function App() {
   const [selectedPreviewVariant, setSelectedPreviewVariant] = useState(null);
   const [adminTab, setAdminTab] = useState('variants');
   const [examCategory, setExamCategory] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null); // { count, time } | null
+  const [cloudStatus, setCloudStatus] = useState(null); // null | 'publishing' | 'published'
+  const resultsUnsubRef = useRef(null);
 
   useEffect(() => {
     const loaded = loadVariants();
     setVariants(loaded);
     setResults(loadResults());
+    return () => {
+      if (resultsUnsubRef.current) resultsUnsubRef.current();
+    };
   }, []);
 
   const handleSaveResults = (result) => {
     const newResults = [...results, result];
     setResults(newResults);
     saveResults(newResults);
+    // Сохраняем в Firebase (фоново) — чтобы преподаватель видел результат
+    saveResultToCloud(result).catch(err => console.error('Firebase save error:', err));
   };
 
   const handleAdminLogin = () => {
     if (adminPassword === 'admin123') {
       setIsAdminLoggedIn(true);
+      // Подписываемся на результаты из Firebase в реальном времени
+      const unsub = subscribeToResults(setResults);
+      resultsUnsubRef.current = unsub;
     } else {
       alert('Неверный пароль');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    if (resultsUnsubRef.current) {
+      resultsUnsubRef.current();
+      resultsUnsubRef.current = null;
+    }
+    setResults(loadResults()); // Возвращаем локальные данные
+    setIsAdminLoggedIn(false);
+    setMode('menu');
+  };
+
+  const handlePublishAll = async () => {
+    setCloudStatus('publishing');
+    try {
+      await publishAllVariantsToCloud(variants);
+      setCloudStatus('published');
+      setTimeout(() => setCloudStatus(null), 3000);
+    } catch (e) {
+      alert('Ошибка публикации: ' + e.message);
+      setCloudStatus(null);
+    }
+  };
+
+  const handleSyncVariants = async () => {
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      const lastSync = loadLastSyncTime();
+      const updates = await syncNewVariants(lastSync);
+      const count = Object.keys(updates).length;
+      if (count > 0) {
+        const merged = { ...variants, ...updates };
+        setVariants(merged);
+        saveVariants(merged);
+      }
+      saveLastSyncTime(new Date().toISOString());
+      setSyncStatus({ count, time: new Date().toLocaleTimeString('ru-RU') });
+    } catch (e) {
+      alert('Ошибка синхронизации: ' + e.message);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -134,13 +190,10 @@ function App() {
     saveVariants(newVariants);
     setIsEditing(false);
     setEditingVariant(null);
-    // Обновляем все состояния, которые могут держать старый объект варианта
-    if (selectedPreviewVariant?.id === updatedVariant.id) {
-      setSelectedPreviewVariant(updatedVariant);
-    }
-    if (selectedVariant?.id === updatedVariant.id) {
-      setSelectedVariant(updatedVariant);
-    }
+    if (selectedPreviewVariant?.id === updatedVariant.id) setSelectedPreviewVariant(updatedVariant);
+    if (selectedVariant?.id === updatedVariant.id) setSelectedVariant(updatedVariant);
+    // Публикуем в Firebase — студенты смогут подтянуть изменение
+    publishVariantToCloud(updatedVariant).catch(err => console.error('Firebase publish error:', err));
     alert(`Вариант "${updatedVariant.name}" сохранён!`);
   };
 
@@ -150,6 +203,7 @@ function App() {
       delete newVariants[id];
       setVariants(newVariants);
       saveVariants(newVariants);
+      deleteVariantFromCloud(id).catch(err => console.error('Firebase delete error:', err));
     }
   };
 
@@ -309,11 +363,20 @@ function App() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {adminTab === 'variants' && (
-              <button onClick={handleCreateVariant} style={{ padding: '7px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 9, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
-                + Новый вариант
-              </button>
+              <>
+                <button onClick={handleCreateVariant} style={{ padding: '7px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 9, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                  + Новый вариант
+                </button>
+                <button
+                  onClick={handlePublishAll}
+                  disabled={cloudStatus === 'publishing'}
+                  style={{ padding: '7px 14px', background: cloudStatus === 'published' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)', color: cloudStatus === 'published' ? '#34d399' : 'rgba(255,255,255,0.55)', border: `1px solid ${cloudStatus === 'published' ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 9, cursor: cloudStatus === 'publishing' ? 'not-allowed' : 'pointer', fontSize: 13 }}
+                >
+                  {cloudStatus === 'publishing' ? 'Публикация...' : cloudStatus === 'published' ? '✓ Опубликовано' : '☁ В облако'}
+                </button>
+              </>
             )}
-            <button onClick={() => { setIsAdminLoggedIn(false); setMode('menu'); }} style={{ padding: '7px 14px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, cursor: 'pointer', fontSize: 13 }}>
+            <button onClick={handleAdminLogout} style={{ padding: '7px 14px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, cursor: 'pointer', fontSize: 13 }}>
               Выйти
             </button>
           </div>
@@ -444,7 +507,7 @@ function App() {
                 <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>История попыток</span>
                 {results.length > 0 && (
                   <button
-                    onClick={() => { if (window.confirm('Очистить все результаты?')) { setResults([]); saveResults([]); } }}
+                    onClick={() => { if (window.confirm('Очистить все результаты?')) { setResults([]); saveResults([]); clearResultsFromCloud().catch(console.error); } }}
                     style={{ padding: '5px 12px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, cursor: 'pointer', fontSize: 12, color: '#e11d48' }}
                   >
                     Очистить все
@@ -714,10 +777,22 @@ function App() {
               <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Без авторизации</p>
               <p style={{ margin: 0, fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>Данные не требуются — просто выберите задание.</p>
             </div>
-            <div style={{ padding: '14px', background: '#f8fafc', borderRadius: 12 }}>
+            <div style={{ padding: '14px', background: '#f8fafc', borderRadius: 12, marginBottom: 12 }}>
               <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 4px', fontWeight: 600 }}>Доступно вариантов</p>
               <p style={{ fontSize: 26, fontWeight: 700, color: '#1e293b', margin: 0 }}>{filteredVariants.length}</p>
             </div>
+            <button
+              onClick={handleSyncVariants}
+              disabled={isSyncing}
+              style={{ width: '100%', padding: '10px', background: isSyncing ? '#f1f5f9' : 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: isSyncing ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 500, color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              {isSyncing ? '⏳ Синхронизация...' : '☁ Обновить из облака'}
+            </button>
+            {syncStatus && (
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b', textAlign: 'center' }}>
+                {syncStatus.count > 0 ? `Обновлено: ${syncStatus.count} вар.` : 'Уже актуально'} · {syncStatus.time}
+              </p>
+            )}
           </div>
         </div>
 
@@ -843,6 +918,24 @@ function App() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Синхронизация вариантов */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <button
+          onClick={handleSyncVariants}
+          disabled={isSyncing}
+          style={{ padding: '9px 24px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 40, color: 'rgba(165,180,252,0.85)', cursor: isSyncing ? 'not-allowed' : 'pointer', fontSize: 13, transition: 'all 0.2s' }}
+          onMouseEnter={e => { if (!isSyncing) { e.currentTarget.style.background = 'rgba(99,102,241,0.2)'; e.currentTarget.style.color = '#a5b4fc'; } }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.color = 'rgba(165,180,252,0.85)'; }}
+        >
+          {isSyncing ? '⏳ Синхронизация...' : '☁ Обновить варианты из облака'}
+        </button>
+        {syncStatus && (
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+            {syncStatus.count > 0 ? `Получено новых: ${syncStatus.count}` : 'Варианты актуальны'} · {syncStatus.time}
+          </span>
+        )}
       </div>
 
       {/* Кнопка админки */}

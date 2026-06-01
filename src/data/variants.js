@@ -2005,3 +2005,6 @@ export const loadResults = () => {
 export const saveResults = (results) => {
   localStorage.setItem('testResults', JSON.stringify(results));
 };
+
+export const loadLastSyncTime = () => localStorage.getItem('variantsSyncedAt');
+export const saveLastSyncTime = (time) => localStorage.setItem('variantsSyncedAt', time);
