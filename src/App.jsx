@@ -111,6 +111,10 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // { count, time } | null
   const [cloudStatus, setCloudStatus] = useState(null); // null | 'publishing' | 'published'
+  const [showTrapHighlighting, setShowTrapHighlighting] = useState(() => {
+    const saved = localStorage.getItem('showTrapHighlighting');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
   const resultsUnsubRef = useRef(null);
 
   useEffect(() => {
@@ -364,6 +368,20 @@ function App() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {adminTab === 'variants' && (
               <>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', padding: '6px 12px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.1)', background: showTrapHighlighting ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)' }}>
+                  <input
+                    type="checkbox"
+                    checked={showTrapHighlighting}
+                    onChange={(e) => {
+                      setShowTrapHighlighting(e.target.checked);
+                      localStorage.setItem('showTrapHighlighting', JSON.stringify(e.target.checked));
+                    }}
+                    style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#ef4444' }}
+                  />
+                  <span style={{ fontSize: 12, color: showTrapHighlighting ? '#fca5a5' : 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+                    Подсвечивать ловушки
+                  </span>
+                </label>
                 <button onClick={handleCreateVariant} style={{ padding: '7px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 9, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                   + Новый вариант
                 </button>
@@ -569,6 +587,7 @@ function App() {
           mode={learningMode}
           onSubmit={handleSaveResults}
           onBack={() => setMode('variantSelect')}
+          showTrapHighlighting={showTrapHighlighting}
         />
       </ReactFlowProvider>
     );

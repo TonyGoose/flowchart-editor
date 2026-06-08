@@ -28,7 +28,7 @@ const getEdgeTypes = (edgeType) => {
   return { custom: BezierEdge };
 };
 
-const StudentView = ({ variant, studentName, groupName, mode, onSubmit, onBack }) => {
+const StudentView = ({ variant, studentName, groupName, mode, onSubmit, onBack, showTrapHighlighting = true }) => {
   const [placedBlocks, setPlacedBlocks] = useState({});
   const [availableBlocks, setAvailableBlocks] = useState(() => {
     const arr = [...variant.blocks];
@@ -89,7 +89,9 @@ const StudentView = ({ variant, studentName, groupName, mode, onSubmit, onBack }
         data: {
           label: placedBlocks[slot.id]?.text || '⬅️ ПЕРЕТАЩИ',
           type: slot.type,
-          isCorrect: placedBlocks[slot.id]?.isCorrect,
+          isCorrect: (!showTrapHighlighting && placedBlocks[slot.id]?.isCorrect === false)
+            ? undefined
+            : placedBlocks[slot.id]?.isCorrect,
           isEmpty: !placedBlocks[slot.id],
           expectedText: slot.expectedText,
           disableHandles: true,
@@ -188,7 +190,7 @@ const StudentView = ({ variant, studentName, groupName, mode, onSubmit, onBack }
 
     setNodes(prev => prev.map(node =>
       node.id === String(nearestSlot.id)
-        ? { ...node, data: { ...node.data, label: block.text, isEmpty: false, isCorrect: block.isCorrect } }
+        ? { ...node, data: { ...node.data, label: block.text, isEmpty: false, isCorrect: (!showTrapHighlighting && block.isCorrect === false) ? undefined : block.isCorrect } }
         : node
     ));
   };
@@ -431,7 +433,7 @@ const StudentView = ({ variant, studentName, groupName, mode, onSubmit, onBack }
   // Компонент блока с правильной формой
   const BlockShape = ({ block, isDragging }) => {
     const type   = block.type;
-    const isTrap = block.isCorrect === false;
+    const isTrap = showTrapHighlighting && block.isCorrect === false;
 
     const inner = (
       <span style={{
