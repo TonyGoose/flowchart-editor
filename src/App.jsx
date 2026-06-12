@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ReactFlowProvider, MiniMap, useReactFlow } from 'reactflow';
-import ReactFlow, { Background, Controls } from 'reactflow';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import ReactFlow, { ReactFlowProvider, MiniMap, useReactFlow, Background, Controls } from 'reactflow';
 import StudentView from './student/StudentView';
 import Editor from './editor/Editor';
-import { VARIANTS, loadVariants, saveVariants, loadResults, saveResults, loadLastSyncTime, saveLastSyncTime } from './data/variants';
+import { loadVariants, saveVariants, loadResults, saveResults, loadLastSyncTime, saveLastSyncTime } from './data/variants';
 import { saveResultToCloud, subscribeToResults, clearResultsFromCloud, publishVariantToCloud, publishAllVariantsToCloud, deleteVariantFromCloud, syncNewVariants } from './firebase/firebaseService';
 import StartEndNode from './editor/nodes/StartEndNode';
 import ProcessNode from './editor/nodes/ProcessNode';
@@ -52,7 +51,7 @@ function VariantPreviewInner({ variant }) {
       fitView({ padding: 0.15, maxZoom: 1, duration: 300 });
     }, 50);
     return () => clearTimeout(timer);
-  }, [variant.id]);
+  }, [variant.id, fitView]);
 
   return (
     <ReactFlow
@@ -67,8 +66,6 @@ function VariantPreviewInner({ variant }) {
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
-      panOnDrag={true}
-      zoomOnScroll={true}
     >
       <Background variant="dots" gap={20} size={1} />
       <Controls showInteractive={false} />
@@ -89,6 +86,67 @@ function VariantPreview({ variant }) {
     <ReactFlowProvider>
       <VariantPreviewInner variant={variant} />
     </ReactFlowProvider>
+  );
+}
+
+const CATEGORIES = [
+  { id: 'all',       name: 'Все',              icon: '📚' },
+  { id: 'linear',    name: 'Линейные',         icon: '📏' },
+  { id: 'branching', name: 'Ветвления',        icon: '🔀' },
+  { id: 'loop',      name: 'Циклы',            icon: '🔄' },
+  { id: 'array',     name: 'Массивы',          icon: '📊' },
+  { id: 'sorting',   name: 'Сортировка',       icon: '⚡' },
+  { id: 'search',    name: 'Поиск',            icon: '🔍' },
+  { id: 'math',      name: 'Математика',       icon: '🧮' },
+  { id: 'numerical', name: 'Числ. методы',     icon: '📐' },
+  { id: 'recursion', name: 'Рекурсия',         icon: '♾️' },
+  { id: 'procedure', name: 'Подпрограммы',     icon: '📋' },
+  { id: 'custom',    name: 'Пользовательские', icon: '✨' },
+];
+
+const CAT_COLORS = {
+  linear: '#3b82f6', branching: '#f59e0b', loop: '#10b981',
+  array: '#8b5cf6', sorting: '#ef4444', search: '#06b6d4',
+  numerical: '#6366f1', math: '#f97316', recursion: '#ec4899',
+  procedure: '#0891b2', custom: '#64748b',
+};
+
+const CATEGORY_COLORS = { ...CAT_COLORS, all: '#1f2937' };
+
+const SUBJECT_GRADIENTS = {
+  all:       'linear-gradient(135deg, #1e293b, #334155)',
+  linear:    'linear-gradient(135deg, #1d4ed8, #3b82f6)',
+  branching: 'linear-gradient(135deg, #b45309, #f59e0b)',
+  loop:      'linear-gradient(135deg, #047857, #10b981)',
+  array:     'linear-gradient(135deg, #5b21b6, #8b5cf6)',
+  sorting:   'linear-gradient(135deg, #991b1b, #ef4444)',
+  search:    'linear-gradient(135deg, #0e7490, #06b6d4)',
+  numerical: 'linear-gradient(135deg, #3730a3, #6366f1)',
+  math:      'linear-gradient(135deg, #c2410c, #f97316)',
+  recursion: 'linear-gradient(135deg, #9d174d, #ec4899)',
+  procedure: 'linear-gradient(135deg, #0e7490, #0891b2)',
+  custom:    'linear-gradient(135deg, #374151, #64748b)',
+};
+
+function AdminTab({ id, label, count, activeTab, onSelect }) {
+  const active = activeTab === id;
+  return (
+    <button
+      onClick={() => onSelect(id)}
+      style={{
+        padding: '0 20px', height: '100%', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+        background: 'transparent',
+        color: active ? 'white' : 'rgba(255,255,255,0.4)',
+        borderBottom: active ? '2px solid #818cf8' : '2px solid transparent',
+        transition: 'all 0.15s',
+        display: 'flex', alignItems: 'center', gap: 7,
+      }}
+    >
+      {label}
+      <span style={{ padding: '1px 7px', borderRadius: 20, fontSize: 11, background: active ? 'rgba(129,140,248,0.25)' : 'rgba(255,255,255,0.07)', color: active ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }}>
+        {count}
+      </span>
+    </button>
   );
 }
 
@@ -113,9 +171,26 @@ function App() {
   const [cloudStatus, setCloudStatus] = useState(null); // null | 'publishing' | 'published'
   const [showTrapHighlighting, setShowTrapHighlighting] = useState(() => {
     const saved = localStorage.getItem('showTrapHighlighting');
-    return saved !== null ? JSON.parse(saved) : true;
+    return saved !== null ? JSON.parse(saved) : false;
   });
+  const [undoStack, setUndoStack] = useState([]);
   const resultsUnsubRef = useRef(null);
+
+  const pushUndo = (currentVariants, currentResults) => {
+    setUndoStack(prev => [...prev.slice(-19), { variants: currentVariants, results: currentResults }]);
+  };
+
+  const handleUndo = () => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const snapshot = prev[prev.length - 1];
+      setVariants(snapshot.variants);
+      saveVariants(snapshot.variants);
+      setResults(snapshot.results);
+      saveResults(snapshot.results);
+      return prev.slice(0, -1);
+    });
+  };
 
   useEffect(() => {
     const loaded = loadVariants();
@@ -189,6 +264,7 @@ function App() {
   };
 
   const handleSaveVariant = (updatedVariant) => {
+    pushUndo(variants, results);
     const newVariants = { ...variants, [updatedVariant.id]: updatedVariant };
     setVariants(newVariants);
     saveVariants(newVariants);
@@ -203,6 +279,7 @@ function App() {
 
   const handleDeleteVariant = (id) => {
     if (window.confirm('Удалить этот вариант?')) {
+      pushUndo(variants, results);
       const newVariants = { ...variants };
       delete newVariants[id];
       setVariants(newVariants);
@@ -229,27 +306,12 @@ function App() {
     setIsEditing(true);
   };
 
-  const categories = [
-    { id: 'all',       name: 'Все',              icon: '📚' },
-    { id: 'linear',    name: 'Линейные',         icon: '📏' },
-    { id: 'branching', name: 'Ветвления',        icon: '🔀' },
-    { id: 'loop',      name: 'Циклы',            icon: '🔄' },
-    { id: 'array',     name: 'Массивы',          icon: '📊' },
-    { id: 'sorting',   name: 'Сортировка',       icon: '⚡' },
-    { id: 'search',    name: 'Поиск',            icon: '🔍' },
-    { id: 'math',      name: 'Математика',       icon: '🧮' },
-    { id: 'numerical', name: 'Числ. методы',     icon: '📐' },
-    { id: 'recursion', name: 'Рекурсия',         icon: '♾️' },
-    { id: 'procedure', name: 'Подпрограммы',     icon: '📋' },
-    { id: 'custom',    name: 'Пользовательские', icon: '✨' },
-  ];
-
-  const filteredVariants = Object.values(variants).filter(v => {
+  const filteredVariants = useMemo(() => Object.values(variants).filter(v => {
     const matchesSearch = v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (v.description && v.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || v.category === selectedCategory;
     return matchesSearch && matchesCategory;
-  });
+  }), [variants, searchTerm, selectedCategory]);
 
   // ========== АДМИН-ПАНЕЛЬ ==========
   if (mode === 'admin') {
@@ -269,7 +331,7 @@ function App() {
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="Пароль"
-                onKeyPress={(e) => e.key === 'Enter' && handleAdminLogin()}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.07)', color: 'white', fontSize: 15, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }}
               />
               <button
@@ -325,29 +387,6 @@ function App() {
     const avgScore = results.length ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length) : null;
     const passCount = results.filter(r => r.passed).length;
     const failCount = results.length - passCount;
-    const catColors = { linear: '#3b82f6', branching: '#f59e0b', loop: '#10b981', array: '#8b5cf6', sorting: '#ef4444', search: '#06b6d4', numerical: '#6366f1', math: '#f97316', recursion: '#ec4899', procedure: '#0891b2', custom: '#64748b' };
-
-    const Tab = ({ id, label, count }) => {
-      const active = adminTab === id;
-      return (
-        <button
-          onClick={() => setAdminTab(id)}
-          style={{
-            padding: '0 20px', height: '100%', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            background: 'transparent',
-            color: active ? 'white' : 'rgba(255,255,255,0.4)',
-            borderBottom: active ? '2px solid #818cf8' : '2px solid transparent',
-            transition: 'all 0.15s',
-            display: 'flex', alignItems: 'center', gap: 7,
-          }}
-        >
-          {label}
-          <span style={{ padding: '1px 7px', borderRadius: 20, fontSize: 11, background: active ? 'rgba(129,140,248,0.25)' : 'rgba(255,255,255,0.07)', color: active ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }}>
-            {count}
-          </span>
-        </button>
-      );
-    };
 
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f1f5f9' }}>
@@ -361,8 +400,8 @@ function App() {
             </div>
             <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)' }} />
             <div style={{ display: 'flex', height: '100%' }}>
-              <Tab id="variants" label="Варианты" count={Object.keys(variants).length} />
-              <Tab id="results"  label="Результаты" count={results.length} />
+              <AdminTab id="variants" label="Варианты" count={Object.keys(variants).length} activeTab={adminTab} onSelect={setAdminTab} />
+              <AdminTab id="results"  label="Результаты" count={results.length} activeTab={adminTab} onSelect={setAdminTab} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -394,6 +433,25 @@ function App() {
                 </button>
               </>
             )}
+            <button
+              onClick={handleUndo}
+              disabled={undoStack.length === 0}
+              title={undoStack.length > 0 ? `Отменить последнее действие (${undoStack.length})` : 'Нет действий для отмены'}
+              style={{
+                padding: '7px 13px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.1)',
+                background: undoStack.length > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)',
+                color: undoStack.length > 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed',
+                fontSize: 13, display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              ↩ Отменить
+              {undoStack.length > 0 && (
+                <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 10, background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.5)' }}>
+                  {undoStack.length}
+                </span>
+              )}
+            </button>
             <button onClick={handleAdminLogout} style={{ padding: '7px 14px', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, cursor: 'pointer', fontSize: 13 }}>
               Выйти
             </button>
@@ -419,7 +477,7 @@ function App() {
                 </div>
               </div>
               <div style={{ padding: '0 12px 8px', display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: '1px solid #f1f5f9' }}>
-                {categories.map(cat => (
+                {CATEGORIES.map(cat => (
                   <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
                     style={{ padding: '3px 8px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, background: selectedCategory === cat.id ? '#1e293b' : '#f1f5f9', color: selectedCategory === cat.id ? 'white' : '#64748b' }}
                   >{cat.icon} {cat.name}</button>
@@ -429,7 +487,7 @@ function App() {
                 {filteredVariants.length === 0 && <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8', fontSize: 13 }}>Ничего не найдено</div>}
                 {filteredVariants.map(v => {
                   const isSelected = selectedPreviewVariant?.id === v.id;
-                  const cc = catColors[v.category] || '#64748b';
+                  const cc = CAT_COLORS[v.category] || '#64748b';
                   const diffColor = v.difficulty === 'easy' ? '#10b981' : v.difficulty === 'medium' ? '#f59e0b' : '#ef4444';
                   const diffLabel = v.difficulty === 'easy' ? 'Лёгкий' : v.difficulty === 'medium' ? 'Средний' : 'Сложный';
                   return (
@@ -466,7 +524,7 @@ function App() {
                 <>
                   <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: catColors[selectedPreviewVariant.category] || '#64748b' }} />
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: CAT_COLORS[selectedPreviewVariant.category] || '#64748b' }} />
                       <span style={{ fontWeight: 600, fontSize: 15, color: '#1e293b' }}>{selectedPreviewVariant.name}</span>
                       <span style={{ fontSize: 12, color: '#94a3b8' }}>· {selectedPreviewVariant.description}</span>
                     </div>
@@ -525,7 +583,7 @@ function App() {
                 <span style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>История попыток</span>
                 {results.length > 0 && (
                   <button
-                    onClick={() => { if (window.confirm('Очистить все результаты?')) { setResults([]); saveResults([]); clearResultsFromCloud().catch(console.error); } }}
+                    onClick={() => { if (window.confirm('Очистить все результаты?')) { pushUndo(variants, results); setResults([]); saveResults([]); clearResultsFromCloud().catch(console.error); } }}
                     style={{ padding: '5px 12px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, cursor: 'pointer', fontSize: 12, color: '#e11d48' }}
                   >
                     Очистить все
@@ -601,11 +659,6 @@ function App() {
       exam:     { gradient: 'linear-gradient(135deg, #ef4444, #dc2626)', icon: '🎓', label: 'Экзамен',    desc: 'Таймер включён, проходной балл 70%' },
     }[learningMode];
 
-    const categoryColors = {
-      linear: '#3b82f6', branching: '#f59e0b', loop: '#10b981',
-      array: '#8b5cf6', sorting: '#ef4444', search: '#06b6d4',
-      numerical: '#6366f1', math: '#f97316', recursion: '#ec4899', procedure: '#0891b2', custom: '#64748b', all: '#1f2937'
-    };
 
     const isExam = learningMode === 'exam';
 
@@ -629,31 +682,11 @@ function App() {
 
     // ===== ЭКЗАМЕН =====
     if (isExam) {
-      const examSubjects = categories.filter(cat => {
+      const examSubjects = CATEGORIES.filter(cat => {
         if (cat.id === 'all') return true;
         return Object.values(variants).some(v => v.category === cat.id);
       });
 
-      const subjectColors = {
-        all: '#1e293b', linear: '#3b82f6', branching: '#f59e0b', loop: '#10b981',
-        array: '#8b5cf6', sorting: '#ef4444', search: '#06b6d4',
-        numerical: '#6366f1', math: '#f97316', recursion: '#ec4899', procedure: '#0891b2', custom: '#64748b',
-      };
-
-      const subjectGradients = {
-        all:       'linear-gradient(135deg, #1e293b, #334155)',
-        linear:    'linear-gradient(135deg, #1d4ed8, #3b82f6)',
-        branching: 'linear-gradient(135deg, #b45309, #f59e0b)',
-        loop:      'linear-gradient(135deg, #047857, #10b981)',
-        array:     'linear-gradient(135deg, #5b21b6, #8b5cf6)',
-        sorting:   'linear-gradient(135deg, #991b1b, #ef4444)',
-        search:    'linear-gradient(135deg, #0e7490, #06b6d4)',
-        numerical: 'linear-gradient(135deg, #3730a3, #6366f1)',
-        math:      'linear-gradient(135deg, #c2410c, #f97316)',
-        recursion: 'linear-gradient(135deg, #9d174d, #ec4899)',
-        procedure: 'linear-gradient(135deg, #0e7490, #0891b2)',
-        custom:    'linear-gradient(135deg, #374151, #64748b)',
-      };
 
       return (
         <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 20px' }}>
@@ -732,7 +765,7 @@ function App() {
                       ? Object.keys(variants).length
                       : Object.values(variants).filter(v => v.category === cat.id).length;
                     const isSelected = examCategory === cat.id;
-                    const grad = subjectGradients[cat.id] || subjectGradients.custom;
+                    const grad = SUBJECT_GRADIENTS[cat.id] || subjectGradients.custom;
                     return (
                       <div
                         key={cat.id}
@@ -822,9 +855,9 @@ function App() {
               style={{ width: '100%', padding: '10px 16px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 14, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {categories.map(cat => (
+              {CATEGORIES.map(cat => (
                 <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                  style={{ padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, background: selectedCategory === cat.id ? categoryColors[cat.id] : '#f1f5f9', color: selectedCategory === cat.id ? 'white' : '#475569' }}
+                  style={{ padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500, background: selectedCategory === cat.id ? CATEGORY_COLORS[cat.id] : '#f1f5f9', color: selectedCategory === cat.id ? 'white' : '#475569' }}
                 >{cat.icon} {cat.name}</button>
               ))}
             </div>
@@ -832,7 +865,7 @@ function App() {
           <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
               {filteredVariants.map(v => {
-                const catColor = categoryColors[v.category] || '#64748b';
+                const catColor = CATEGORY_COLORS[v.category] || '#64748b';
                 const diffLabel = v.difficulty === 'easy' ? 'Лёгкий' : v.difficulty === 'medium' ? 'Средний' : 'Сложный';
                 const diffColor = v.difficulty === 'easy' ? '#10b981' : v.difficulty === 'medium' ? '#f59e0b' : '#ef4444';
                 return (
